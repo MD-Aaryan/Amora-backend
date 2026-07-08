@@ -1,11 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UsersService } from '../../users/users.service';
 
 export interface JwtPayload {
-  sub: string; // User UUID
+  sub: string;
   firebaseUid: string;
   roles: string[];
   activeRole: string;
@@ -13,30 +13,38 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
+  private readonly logger = new Logger(JwtStrategy.name);
+
   constructor(
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
   ) {
+    const secret = configService.get<string>('JWT_SECRET');
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET')!,
+      secretOrKey: secret,
     });
   }
 
-  /**
-   * Called by Passport after the JWT is verified.
-   * Attaches user data + role info to request.user.
-   */
   async validate(payload: JwtPayload) {
+    if (!payload || !payload.sub) {
+      throw new UnauthorizedException({
+        success: false,
+        message: 'Invalid token payload',
+        error: { code: 'AUTH_INVALID_TOKEN' },
+      });
+    }
+
     const user = await this.usersService.findById(payload.sub);
     if (!user || !user.is_active) {
       throw new UnauthorizedException({
         success: false,
         message: 'User account not found or is deactivated',
-        error: {
-          code: 'AUTH_USER_INVALID',
-        },
+        error: { code: 'AUTH_USER_INVALID' },
       });
     }
 

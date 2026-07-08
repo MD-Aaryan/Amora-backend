@@ -8,7 +8,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { FirebaseModule } from '../firebase/firebase.module';
 import { UsersModule } from '../users/users.module';
 import { SessionsModule } from '../sessions/sessions.module';
-
 @Module({
   imports: [
     ConfigModule,

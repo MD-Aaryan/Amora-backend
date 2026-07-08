@@ -8,6 +8,8 @@ import { FirebaseModule } from './firebase/firebase.module';
 import { UsersModule } from './users/users.module';
 import { SessionsModule } from './sessions/sessions.module';
 import { AuthModule } from './auth/auth.module';
+import { CreatorModule } from './creator/creator.module';
+import { SalonModule } from './salon/salon.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -22,12 +24,12 @@ import { RolesGuard } from './common/guards/roles.guard';
     UsersModule,
     SessionsModule,
     AuthModule,
+    CreatorModule,
+    SalonModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    // Global guards: JwtAuthGuard runs first, then RolesGuard.
-    // Routes decorated with @Public() bypass JwtAuthGuard.
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

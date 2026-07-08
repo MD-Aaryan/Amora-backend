@@ -13,6 +13,14 @@ generator client {
 // ENUM DEFINITIONS
 // ==========================================
 
+enum UserStatus {
+  ACTIVE
+  PENDING
+  BLOCKED
+  SUSPENDED
+  DELETED
+}
+
 enum RoleName {
   CUSTOMER
   CREATOR
@@ -115,16 +123,25 @@ enum ReportStatus {
 // ==========================================
 
 model User {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email        String?   @unique @db.VarChar(255)
-  phone        String?   @unique @db.VarChar(50)
-  firebase_uid String    @unique @db.VarChar(255)
-  display_name String?   @db.VarChar(100)
-  avatar_url   String?   @db.Text
-  is_active    Boolean   @default(true)
-  created_at   DateTime  @default(now()) @db.Timestamp
-  updated_at   DateTime  @updatedAt @db.Timestamp
-  deleted_at   DateTime? @db.Timestamp
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String?      @unique @db.VarChar(255)
+  phone              String?      @unique @db.VarChar(50)
+  firebase_uid       String       @unique @db.VarChar(255)
+  display_name       String?      @db.VarChar(100)
+  username           String?      @unique @db.VarChar(50)
+  bio                String?      @db.Text
+  gender             String?      @db.VarChar(20)
+  date_of_birth      DateTime?    @db.Date
+  country            String?      @db.VarChar(100)
+  state              String?      @db.VarChar(100)
+  city               String?      @db.VarChar(100)
+  preferred_language String       @default("en") @db.VarChar(10)
+  avatar_url         String?      @db.Text
+  status             UserStatus   @default(ACTIVE)
+  is_active          Boolean      @default(true)
+  created_at         DateTime     @default(now()) @db.Timestamp
+  updated_at         DateTime     @updatedAt @db.Timestamp
+  deleted_at         DateTime?    @db.Timestamp
 
   // Relations
   roles              UserRole[]

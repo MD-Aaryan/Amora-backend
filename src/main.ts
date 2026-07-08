@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -9,10 +10,27 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
 
-  // Global prefix: /api/v1
+  // Security headers via Helmet
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          imgSrc: ["'self'", 'data:', 'https://res.cloudinary.com'],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+          connectSrc: ["'self'"],
+          frameSrc: ["'none'"],
+          objectSrc: ["'none'"],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
+
   app.setGlobalPrefix('api/v1');
 
-  // Enable CORS for all frontend portals
   app.enableCors({
     origin: [
       'http://localhost:3000',
@@ -20,24 +38,23 @@ async function bootstrap() {
       'https://lohanaa.com',
     ],
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Global validation pipe: auto-validates DTOs via class-validator
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: {
-        enableImplicitConversion: true,
+        enableImplicitConversion: false,
       },
     }),
   );
 
-  // Global exception filter: uniform error response shape
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Global interceptors: response wrapping + request logging
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
     new TransformInterceptor(),
@@ -45,6 +62,6 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  logger.log(`AMORA backend is running on http://localhost:${port}/api/v1`);
+  logger.log(`AMORA backend running on http://localhost:${port}/api/v1`);
 }
 bootstrap();
