@@ -80,7 +80,7 @@ One user can have multiple roles.
 
 ---
 
-# 5. DEVELOPMENT RULES
+<!-- # 5. DEVELOPMENT RULES
 
 - Never change architecture without approval
 - No duplicate modules
@@ -258,4 +258,4 @@ src/
     ├── analytics.service.ts
     ├── creator.analytics.ts
     ├── salon.analytics.ts
-    └── admin.analytics.ts
+    └── admin.analytics.ts -->
