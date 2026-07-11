@@ -30,6 +30,7 @@ export class VideoRepository {
     visibility?: VideoVisibility;
     categoryIds: string[];
     tagNames: string[];
+    status?: VideoStatus;
   }) {
     const tagRecords = await Promise.all(
       data.tagNames.map((name) =>
@@ -53,7 +54,7 @@ export class VideoRepository {
         thumbnail_url: data.thumbnail_url,
         language: data.language || 'en',
         visibility: data.visibility || VideoVisibility.PUBLIC,
-        status: VideoStatus.ACTIVE,
+        status: data.status || VideoStatus.ACTIVE,
         categories: {
           create: data.categoryIds.map((id) => ({ category_id: id })),
         },
@@ -183,6 +184,27 @@ export class VideoRepository {
     return this.prisma.video.update({
       where: { id },
       data: { deleted_at: new Date() },
+    });
+  }
+
+  async findDraftById(id: string, creatorId?: string, salonId?: string) {
+    if (!creatorId && !salonId) return null;
+
+    const where: any = { id, status: VideoStatus.DRAFT, deleted_at: null };
+    if (creatorId) where.creator_id = creatorId;
+    if (salonId) where.salon_id = salonId;
+
+    return this.prisma.video.findFirst({
+      where,
+      include: this.videoInclude,
+    });
+  }
+
+  async publish(id: string) {
+    return this.prisma.video.update({
+      where: { id },
+      data: { status: VideoStatus.ACTIVE },
+      include: this.videoInclude,
     });
   }
 

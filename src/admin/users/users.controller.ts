@@ -127,6 +127,19 @@ export class AdminUsersController {
     return this.adminUsersService.updateUserStatus(id, dto.action);
   }
 
+  @Patch(':id/promote')
+  @ApiOperation({
+    summary: 'Promote user to admin',
+    description: 'Assigns the ADMIN role to an existing user.',
+  })
+  @ApiParam({ name: 'id', required: true, description: 'UUID of the user' })
+  @ApiResponse({ status: 200, description: 'User promoted to admin successfully' })
+  @ApiResponse({ status: 400, description: 'User is already an admin' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async promoteToAdmin(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminUsersService.promoteToAdmin(id);
+  }
+
   @Patch(':id/restore')
   @ApiOperation({
     summary: 'Restore a deleted user',

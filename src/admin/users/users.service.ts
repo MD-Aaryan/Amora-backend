@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { AdminUsersRepository } from './users.repository';
@@ -170,6 +171,48 @@ export class AdminUsersService {
       status: updated.status,
       isActive: updated.is_active,
       message: `User ${action}d successfully.`,
+    };
+  }
+
+  async promoteToAdmin(userId: string) {
+    const user = await this.usersRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
+    }
+
+    const roleNames = this.usersRepository.extractRoleNames(user);
+    if (roleNames.includes(RoleName.ADMIN)) {
+      throw new BadRequestException({
+        success: false,
+        message: 'User is already an admin.',
+        error: { code: 'USER_ALREADY_ADMIN' },
+      });
+    }
+
+    const updated = await this.usersRepository.assignRole(
+      userId,
+      RoleName.ADMIN,
+    );
+
+    if (!updated) {
+      throw new InternalServerErrorException({
+        success: false,
+        message: 'Failed to assign ADMIN role.',
+        error: { code: 'ROLE_ASSIGN_FAILED' },
+      });
+    }
+
+    this.logger.log(`User ${userId} promoted to ADMIN`);
+
+    return {
+      id: updated.id,
+      displayName: updated.display_name,
+      roles: this.usersRepository.extractRoleNames(updated),
+      message: 'User promoted to admin successfully.',
     };
   }
 

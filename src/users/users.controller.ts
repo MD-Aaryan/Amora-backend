@@ -13,6 +13,7 @@ import {
   ParseUUIDPipe,
   MaxFileSizeValidator,
   ParseFilePipe,
+  FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -27,6 +28,7 @@ import {
 import { UsersService } from './users.service';
 import { GetUser } from '../common/decorators/get-user.decorator';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { RecordWatchDto } from './dto/record-watch.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -124,7 +126,10 @@ export class UsersController {
     @GetUser('id') userId: string,
     @UploadedFile(
       new ParseFilePipe({
-        validators: [new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 })],
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: '.(jpeg|jpg|png|gif|webp)' }),
+        ],
         fileIsRequired: false,
       }),
     )
@@ -242,14 +247,13 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'Video not found.' })
   async recordWatch(
     @GetUser('id') userId: string,
-    @Body()
-    body: { videoId: string; lastPosition?: number; completed?: boolean },
+    @Body() dto: RecordWatchDto,
   ) {
     return this.usersService.recordWatch(
       userId,
-      body.videoId,
-      body.lastPosition,
-      body.completed,
+      dto.videoId,
+      dto.lastPosition,
+      dto.completed,
     );
   }
 

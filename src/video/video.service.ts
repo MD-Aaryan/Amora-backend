@@ -14,7 +14,7 @@ import { CreateVideoDto } from './dto/create-video.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
 import { VideoEntity } from './entities/video.entity';
 import { RoleName } from '../common/enums/role.enum';
-import { ApprovalStatus, VideoVisibility } from '@prisma/client';
+import { ApprovalStatus, VideoStatus, VideoVisibility } from '@prisma/client';
 
 @Injectable()
 export class VideoService {
@@ -406,6 +406,267 @@ export class VideoService {
 
     this.logger.log(`Video file replaced: ${videoId} by user ${userId}`);
     return this.mapToEntity(updated);
+  }
+
+  async uploadDraft(
+    userId: string,
+    activeRole: string,
+    dto: CreateVideoDto,
+    videoFile?: Express.Multer.File,
+    thumbnailFile?: Express.Multer.File,
+  ): Promise<VideoEntity> {
+    const partnerType = activeRole as RoleName;
+    if (partnerType !== RoleName.CREATOR && partnerType !== RoleName.SALON) {
+      throw new ForbiddenException({
+        success: false,
+        message: 'Only approved creators and salon partners can create drafts.',
+        error: { code: 'UPLOAD_NOT_ALLOWED' },
+      });
+    }
+
+    const profileId = await this.getApprovedProfileId(userId, partnerType);
+
+    for (const categoryId of dto.category_ids) {
+      const exists = await this.videoRepository.categoryExists(categoryId);
+      if (!exists) {
+        throw new BadRequestException({
+          success: false,
+          message: `Category ${categoryId} does not exist.`,
+          error: { code: 'CATEGORY_NOT_FOUND' },
+        });
+      }
+    }
+
+    let thumbnailResult: { url: string; publicId: string } | null = null;
+    let videoResult: { url: string; publicId: string } | null = null;
+
+    if (thumbnailFile) {
+      this.validateThumbnailFile(thumbnailFile);
+      try {
+        thumbnailResult =
+          await this.cloudinaryService.uploadImageWithPublicId(thumbnailFile);
+      } catch {
+        throw new BadRequestException({
+          success: false,
+          message: 'Failed to upload thumbnail.',
+          error: { code: 'THUMBNAIL_UPLOAD_FAILED' },
+        });
+      }
+    }
+
+    if (videoFile) {
+      this.validateVideoFile(videoFile);
+      try {
+        videoResult = await this.cloudinaryService.uploadVideo(videoFile);
+      } catch {
+        if (thumbnailResult) {
+          await this.cloudinaryService
+            .deleteByPublicId(thumbnailResult.publicId)
+            .catch(() => {});
+        }
+        throw new BadRequestException({
+          success: false,
+          message: 'Failed to upload video.',
+          error: { code: 'VIDEO_UPLOAD_FAILED' },
+        });
+      }
+    }
+
+    try {
+      const video = await this.videoRepository.create({
+        creator_id: partnerType === RoleName.CREATOR ? profileId : undefined,
+        salon_id: partnerType === RoleName.SALON ? profileId : undefined,
+        cloudinary_public_id: videoResult?.publicId,
+        thumbnail_public_id: thumbnailResult?.publicId,
+        title: dto.title,
+        description: dto.description,
+        video_url: videoResult?.url || '',
+        thumbnail_url: thumbnailResult?.url || '',
+        language: dto.language || 'en',
+        visibility: dto.visibility || undefined,
+        categoryIds: dto.category_ids,
+        tagNames: dto.tags || [],
+        status: VideoStatus.DRAFT,
+      });
+
+      this.logger.log(`Video draft created: ${video.id} by user ${userId}`);
+      return this.mapToEntity(video);
+    } catch (error) {
+      if (videoResult) {
+        await this.cloudinaryService
+          .deleteByPublicId(videoResult.publicId, 'video')
+          .catch(() => {});
+      }
+      if (thumbnailResult) {
+        await this.cloudinaryService
+          .deleteByPublicId(thumbnailResult.publicId)
+          .catch(() => {});
+      }
+      throw error;
+    }
+  }
+
+  async updateDraft(
+    userId: string,
+    activeRole: string,
+    videoId: string,
+    dto: UpdateVideoDto,
+    videoFile?: Express.Multer.File,
+    thumbnailFile?: Express.Multer.File,
+  ): Promise<VideoEntity> {
+    const profileId = await this.getOwnerProfileId(
+      userId,
+      activeRole as RoleName,
+    );
+    const partnerType = activeRole as RoleName;
+
+    const existing = await this.videoRepository.findDraftById(
+      videoId,
+      partnerType === RoleName.CREATOR ? profileId : undefined,
+      partnerType === RoleName.SALON ? profileId : undefined,
+    );
+
+    if (!existing) {
+      throw new NotFoundException({
+        success: false,
+        message: 'Draft video not found.',
+        error: { code: 'DRAFT_NOT_FOUND' },
+      });
+    }
+
+    if (dto.category_ids) {
+      for (const categoryId of dto.category_ids) {
+        const exists = await this.videoRepository.categoryExists(categoryId);
+        if (!exists) {
+          throw new BadRequestException({
+            success: false,
+            message: `Category ${categoryId} does not exist.`,
+            error: { code: 'CATEGORY_NOT_FOUND' },
+          });
+        }
+      }
+    }
+
+    const updateData: any = {};
+    if (dto.title !== undefined) updateData.title = dto.title;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.category_ids !== undefined)
+      updateData.categoryIds = dto.category_ids;
+    if (dto.tags !== undefined) updateData.tagNames = dto.tags;
+    if (dto.language !== undefined) updateData.language = dto.language;
+    if (dto.visibility !== undefined)
+      updateData.visibility = dto.visibility as VideoVisibility;
+    if (dto.is_free !== undefined) updateData.is_free = dto.is_free;
+    if (dto.price !== undefined) updateData.price = dto.price;
+
+    if (thumbnailFile) {
+      this.validateThumbnailFile(thumbnailFile);
+      try {
+        const result =
+          await this.cloudinaryService.uploadImageWithPublicId(thumbnailFile);
+        updateData.thumbnail_url = result.url;
+        updateData.thumbnail_public_id = result.publicId;
+
+        const oldThumbnailPublicId =
+          existing.thumbnail_public_id ||
+          this.cloudinaryService.extractPublicId(existing.thumbnail_url);
+        if (oldThumbnailPublicId) {
+          await this.cloudinaryService
+            .deleteByPublicId(oldThumbnailPublicId)
+            .catch(() => {});
+        }
+      } catch {
+        throw new BadRequestException({
+          success: false,
+          message: 'Failed to upload thumbnail.',
+          error: { code: 'THUMBNAIL_UPLOAD_FAILED' },
+        });
+      }
+    }
+
+    if (videoFile) {
+      this.validateVideoFile(videoFile);
+      try {
+        const result = await this.cloudinaryService.uploadVideo(videoFile);
+        updateData.video_url = result.url;
+        updateData.cloudinary_public_id = result.publicId;
+
+        const oldVideoPublicId = existing.cloudinary_public_id;
+        if (oldVideoPublicId) {
+          await this.cloudinaryService
+            .deleteByPublicId(oldVideoPublicId, 'video')
+            .catch(() => {});
+        }
+      } catch {
+        throw new BadRequestException({
+          success: false,
+          message: 'Failed to upload video.',
+          error: { code: 'VIDEO_UPLOAD_FAILED' },
+        });
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return this.mapToEntity(existing);
+    }
+
+    const updated = await this.videoRepository.update(videoId, updateData);
+    this.logger.log(`Draft updated: ${videoId} by user ${userId}`);
+    return this.mapToEntity(updated);
+  }
+
+  async publishDraft(
+    userId: string,
+    activeRole: string,
+    videoId: string,
+  ): Promise<VideoEntity> {
+    const profileId = await this.getOwnerProfileId(
+      userId,
+      activeRole as RoleName,
+    );
+    const partnerType = activeRole as RoleName;
+
+    const existing = await this.videoRepository.findDraftById(
+      videoId,
+      partnerType === RoleName.CREATOR ? profileId : undefined,
+      partnerType === RoleName.SALON ? profileId : undefined,
+    );
+
+    if (!existing) {
+      throw new NotFoundException({
+        success: false,
+        message: 'Draft video not found.',
+        error: { code: 'DRAFT_NOT_FOUND' },
+      });
+    }
+
+    if (!existing.video_url) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Cannot publish a draft without a video file.',
+        error: { code: 'DRAFT_MISSING_VIDEO' },
+      });
+    }
+
+    if (!existing.thumbnail_url) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Cannot publish a draft without a thumbnail.',
+        error: { code: 'DRAFT_MISSING_THUMBNAIL' },
+      });
+    }
+
+    if (!existing.title) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Cannot publish a draft without a title.',
+        error: { code: 'DRAFT_MISSING_TITLE' },
+      });
+    }
+
+    const published = await this.videoRepository.publish(videoId);
+    this.logger.log(`Draft published: ${videoId} by user ${userId}`);
+    return this.mapToEntity(published);
   }
 
   async getPublicVideo(id: string): Promise<VideoEntity> {

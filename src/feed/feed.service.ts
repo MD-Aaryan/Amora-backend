@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { FeedRepository } from './feed.repository';
 import { CreatorRepository } from '../creator/creator.repository';
@@ -13,6 +14,7 @@ import { ApprovalStatus } from '@prisma/client';
 
 @Injectable()
 export class FeedService {
+  private readonly logger = new Logger(FeedService.name);
   private readonly defaultLimit = 20;
 
   constructor(

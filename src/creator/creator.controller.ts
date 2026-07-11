@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -32,6 +33,7 @@ import { UpdateCreatorProfileDto } from './dto/update-creator-profile.dto';
 export class CreatorController {
   constructor(private readonly creatorService: CreatorService) {}
 
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('apply')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

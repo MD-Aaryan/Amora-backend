@@ -11,6 +11,7 @@ import {
   ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -18,7 +19,6 @@ import {
   ApiResponse,
   ApiParam,
   ApiBody,
-  ApiQuery,
 } from '@nestjs/swagger';
 import { SalonService } from './salon.service';
 import { GetUser } from '../common/decorators/get-user.decorator';
@@ -36,6 +36,7 @@ import { UpdateServiceDto } from './dto/update-service.dto';
 export class SalonController {
   constructor(private readonly salonService: SalonService) {}
 
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('apply')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

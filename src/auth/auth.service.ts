@@ -23,6 +23,7 @@ const IDENTITY_TOOLKIT_BASE = 'https://identitytoolkit.googleapis.com/v1';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly adminEmails: Set<string>;
 
   constructor(
     private readonly firebaseService: FirebaseService,
@@ -32,7 +33,12 @@ export class AuthService {
     private readonly configService: ConfigService,
     @Inject(FIREBASE_ADMIN_PROVIDER)
     private readonly firebaseAdmin: App,
-  ) {}
+  ) {
+    const raw = this.configService.get<string>('ADMIN_EMAILS', '');
+    this.adminEmails = new Set(
+      raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+    );
+  }
 
   async signup(data: {
     email: string;
@@ -50,17 +56,26 @@ export class AuthService {
       displayName,
     });
 
+    let selectedRoles: string[] = [];
+
     if (data.roles && data.roles.length > 0) {
       const validCreatorRoles: RoleName[] = [RoleName.CREATOR, RoleName.SALON];
-      const validRoles = data.roles.filter((r) =>
+      selectedRoles = data.roles.filter((r) =>
         validCreatorRoles.includes(r as RoleName),
       );
-      if (validRoles.length > 0) {
-        await getAuth(this.firebaseAdmin).setCustomUserClaims(
-          firebaseUser.uid,
-          { selectedRoles: validRoles },
-        );
-      }
+    }
+
+    if (this.adminEmails.has(data.email.toLowerCase())) {
+      await getAuth(this.firebaseAdmin).setCustomUserClaims(
+        firebaseUser.uid,
+        { selectedRoles: [RoleName.ADMIN] },
+      );
+      selectedRoles = [RoleName.ADMIN];
+    } else if (selectedRoles.length > 0) {
+      await getAuth(this.firebaseAdmin).setCustomUserClaims(
+        firebaseUser.uid,
+        { selectedRoles },
+      );
     }
 
     try {
@@ -73,9 +88,11 @@ export class AuthService {
         emailVerified: false,
         roles: [
           RoleName.CUSTOMER,
-          ...(data.roles?.filter((r) =>
-            validRolesList.includes(r as RoleName),
-          ) || []),
+          ...(this.adminEmails.has(data.email.toLowerCase())
+            ? [RoleName.ADMIN]
+            : data.roles?.filter((r) =>
+                validRolesList.includes(r as RoleName),
+              ) || []),
         ],
         message:
           'Account created. Please check your inbox and verify your email before logging in.',
@@ -107,6 +124,16 @@ export class AuthService {
     }
 
     const selectedRoles: string[] = (decodedToken as any).selectedRoles || [];
+
+    if (this.adminEmails.has(decodedToken.email?.toLowerCase() || '')) {
+      if (!selectedRoles.includes(RoleName.ADMIN)) {
+        selectedRoles.push(RoleName.ADMIN);
+        await getAuth(this.firebaseAdmin).setCustomUserClaims(
+          decodedToken.uid,
+          { selectedRoles },
+        );
+      }
+    }
 
     const existingUser = await this.usersService.findByFirebaseUid(
       decodedToken.uid,
