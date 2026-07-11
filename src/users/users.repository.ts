@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { RoleName } from '../common/enums/role.enum';
-import { Prisma, UserStatus, VideoStatus } from '@prisma/client';
+import {
+  Prisma,
+  UserStatus,
+  VideoStatus,
+  VideoVisibility,
+} from '@prisma/client';
 
 @Injectable()
 export class UsersRepository {
@@ -83,14 +88,20 @@ export class UsersRepository {
     });
 
     if (!customerRole) {
-      throw new Error('Default CUSTOMER role not found in database. Please seed the roles table.');
+      throw new Error(
+        'Default CUSTOMER role not found in database. Please seed the roles table.',
+      );
     }
 
-    const roleConnections: { role_id: string }[] = [{ role_id: customerRole.id }];
+    const roleConnections: { role_id: string }[] = [
+      { role_id: customerRole.id },
+    ];
 
     if (data.extraRoles && data.extraRoles.length > 0) {
       for (const roleName of data.extraRoles) {
-        const role = await this.prisma.role.findUnique({ where: { name: roleName as RoleName } });
+        const role = await this.prisma.role.findUnique({
+          where: { name: roleName as RoleName },
+        });
         if (role) {
           roleConnections.push({ role_id: role.id });
         }
@@ -134,7 +145,9 @@ export class UsersRepository {
   }
 
   async assignRole(userId: string, roleName: string) {
-    const role = await this.prisma.role.findUnique({ where: { name: roleName as RoleName } });
+    const role = await this.prisma.role.findUnique({
+      where: { name: roleName as RoleName },
+    });
     if (!role) return null;
 
     await this.prisma.userRole.upsert({
@@ -195,11 +208,25 @@ export class UsersRepository {
     });
   }
 
-  async upsertWatchHistory(userId: string, videoId: string, lastPosition: number, completed: boolean) {
+  async upsertWatchHistory(
+    userId: string,
+    videoId: string,
+    lastPosition: number,
+    completed: boolean,
+  ) {
     return this.prisma.watchHistory.upsert({
       where: { user_id_video_id: { user_id: userId, video_id: videoId } },
-      create: { user_id: userId, video_id: videoId, last_position: lastPosition, completed },
-      update: { last_position: lastPosition, completed, watched_at: new Date() },
+      create: {
+        user_id: userId,
+        video_id: videoId,
+        last_position: lastPosition,
+        completed,
+      },
+      update: {
+        last_position: lastPosition,
+        completed,
+        watched_at: new Date(),
+      },
     });
   }
 
@@ -241,7 +268,12 @@ export class UsersRepository {
 
   async follow(followerId: string, followingId: string) {
     return this.prisma.follower.upsert({
-      where: { follower_id_following_id: { follower_id: followerId, following_id: followingId } },
+      where: {
+        follower_id_following_id: {
+          follower_id: followerId,
+          following_id: followingId,
+        },
+      },
       create: { follower_id: followerId, following_id: followingId },
       update: {},
     });
@@ -249,7 +281,12 @@ export class UsersRepository {
 
   async unfollow(followerId: string, followingId: string) {
     return this.prisma.follower.delete({
-      where: { follower_id_following_id: { follower_id: followerId, following_id: followingId } },
+      where: {
+        follower_id_following_id: {
+          follower_id: followerId,
+          following_id: followingId,
+        },
+      },
     });
   }
 
@@ -263,7 +300,11 @@ export class UsersRepository {
 
   async getLatestVideos(take = 20) {
     return this.prisma.video.findMany({
-      where: { status: VideoStatus.ACTIVE },
+      where: {
+        status: VideoStatus.ACTIVE,
+        visibility: VideoVisibility.PUBLIC,
+        deleted_at: null,
+      },
       include: {
         creator: { include: { user: true } },
         categories: { include: { category: true } },
@@ -275,7 +316,11 @@ export class UsersRepository {
 
   async getTrendingVideos(take = 20) {
     return this.prisma.video.findMany({
-      where: { status: VideoStatus.ACTIVE },
+      where: {
+        status: VideoStatus.ACTIVE,
+        visibility: VideoVisibility.PUBLIC,
+        deleted_at: null,
+      },
       include: {
         creator: { include: { user: true } },
         categories: { include: { category: true } },
@@ -292,5 +337,4 @@ export class UsersRepository {
       orderBy: { name: 'asc' },
     });
   }
-
 }

@@ -54,6 +54,11 @@ enum VideoStatus {
   DELETED
 }
 
+enum VideoVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum BookingStatus {
   PENDING
   CONFIRMED
@@ -114,6 +119,7 @@ enum NotificationType {
 
 enum ReportStatus {
   PENDING
+  UNDER_REVIEW
   RESOLVED
   DISMISSED
 }
@@ -287,6 +293,7 @@ model SalonProfile {
   offers   Offer[]
   bookings Booking[]
   reviews  Review[]
+  videos   Video[]
 
   @@index([city])
   @@index([state])
@@ -325,8 +332,10 @@ model Category {
   slug        String   @unique @db.VarChar(100)
   description String?  @db.Text
   parent_id   String?  @db.Uuid
+  is_active   Boolean  @default(true)
   created_at  DateTime @default(now()) @db.Timestamp
   updated_at  DateTime @updatedAt @db.Timestamp
+  deleted_at  DateTime? @db.Timestamp
 
   // Relations
   parent           Category?         @relation("SubCategories", fields: [parent_id], references: [id], onDelete: SetNull)
@@ -334,28 +343,37 @@ model Category {
   video_categories VideoCategory[]
   services         ServiceCategory[]
 
+  @@index([deleted_at])
   @@map("categories")
 }
 
 model Video {
-  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  creator_id     String      @db.Uuid
-  title          String      @db.VarChar(255)
-  description    String?     @db.Text
-  video_url      String      @db.Text
-  thumbnail_url  String      @db.Text
-  duration       Float       @default(0.0)
-  views_count    Int         @default(0)
-  likes_count    Int         @default(0)
-  comments_count Int         @default(0)
-  shares_count   Int         @default(0)
-  status         VideoStatus @default(PROCESSING)
-  created_at     DateTime    @default(now()) @db.Timestamp
-  updated_at     DateTime    @updatedAt @db.Timestamp
-  deleted_at     DateTime?   @db.Timestamp
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creator_id          String?         @db.Uuid
+  salon_id            String?         @db.Uuid
+  cloudinary_public_id  String?         @db.Text
+  thumbnail_public_id   String?         @db.Text
+  is_free               Boolean         @default(true)
+  price               Decimal?        @db.Decimal(10, 2)
+  title               String          @db.VarChar(255)
+  description         String?         @db.Text
+  video_url           String          @db.Text
+  thumbnail_url       String          @db.Text
+  duration            Float           @default(0.0)
+  language            String          @default("en") @db.VarChar(10)
+  visibility          VideoVisibility @default(PUBLIC)
+  views_count         Int             @default(0)
+  likes_count         Int             @default(0)
+  comments_count      Int             @default(0)
+  shares_count        Int             @default(0)
+  status              VideoStatus     @default(PROCESSING)
+  created_at          DateTime        @default(now()) @db.Timestamp
+  updated_at          DateTime        @updatedAt @db.Timestamp
+  deleted_at          DateTime?       @db.Timestamp
 
   // Relations
-  creator         CreatorProfile  @relation(fields: [creator_id], references: [id], onDelete: Restrict)
+  creator         CreatorProfile? @relation(fields: [creator_id], references: [id], onDelete: Restrict)
+  salon           SalonProfile?   @relation(fields: [salon_id], references: [id], onDelete: Restrict)
   categories      VideoCategory[]
   tags            VideoTag[]
   video_views     VideoView[]
@@ -367,7 +385,9 @@ model Video {
   reports         Report[]
 
   @@index([creator_id])
+  @@index([salon_id])
   @@index([status])
+  @@index([visibility])
   @@index([created_at])
   @@index([deleted_at])
   @@map("videos")
@@ -492,12 +512,13 @@ model SavedVideo {
 }
 
 model WatchHistory {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id       String   @db.Uuid
-  video_id      String   @db.Uuid
-  last_position Float    @default(0.0)
-  completed     Boolean  @default(false)
-  watched_at    DateTime @default(now()) @db.Timestamp
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String   @db.Uuid
+  video_id       String   @db.Uuid
+  last_position  Float    @default(0.0)
+  watch_duration Float?
+  completed      Boolean  @default(false)
+  watched_at     DateTime @default(now()) @db.Timestamp
 
   // Relations
   user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -955,6 +976,16 @@ model AnalyticsMonthly {
 
   @@unique([year, month])
   @@map("analytics_monthly")
+}
+
+model PopularSearch {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  query        String   @unique @db.VarChar(255)
+  search_count Int      @default(1)
+  created_at   DateTime @default(now()) @db.Timestamp
+  updated_at   DateTime @updatedAt @db.Timestamp
+
+  @@map("popular_searches")
 }
 
 model SearchHistory {

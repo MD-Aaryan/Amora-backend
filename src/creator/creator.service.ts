@@ -12,7 +12,12 @@ import { ApplyCreatorDto } from './dto/apply-creator.dto';
 import { UpdateCreatorProfileDto } from './dto/update-creator-profile.dto';
 import { CreatorProfileEntity } from './entities/creator-profile.entity';
 import { CreatorDashboardEntity } from './entities/creator-dashboard.entity';
-import { ApprovalStatus, KycStatus, UserStatus } from '@prisma/client';
+import {
+  ApprovalStatus,
+  KycStatus,
+  UserStatus,
+  VideoStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class CreatorService {
@@ -26,22 +31,46 @@ export class CreatorService {
   async apply(userId: string, dto: ApplyCreatorDto) {
     const user = await this.usersRepository.findById(userId);
     if (!user) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
 
-    if (user.status === UserStatus.BLOCKED || user.status === UserStatus.SUSPENDED || user.status === UserStatus.DELETED) {
-      throw new ForbiddenException({ success: false, message: 'Account is not eligible.', error: { code: 'ACCOUNT_INELIGIBLE' } });
+    if (
+      user.status === UserStatus.BLOCKED ||
+      user.status === UserStatus.SUSPENDED ||
+      user.status === UserStatus.DELETED
+    ) {
+      throw new ForbiddenException({
+        success: false,
+        message: 'Account is not eligible.',
+        error: { code: 'ACCOUNT_INELIGIBLE' },
+      });
     }
 
     const existingProfile = await this.creatorRepository.findByUserId(userId);
     if (existingProfile) {
       if (existingProfile.status === ApprovalStatus.PENDING) {
-        throw new ConflictException({ success: false, message: 'Creator application already pending.', error: { code: 'APPLICATION_PENDING' } });
+        throw new ConflictException({
+          success: false,
+          message: 'Creator application already pending.',
+          error: { code: 'APPLICATION_PENDING' },
+        });
       }
       if (existingProfile.status === ApprovalStatus.APPROVED) {
-        throw new ConflictException({ success: false, message: 'Already a creator.', error: { code: 'ALREADY_CREATOR' } });
+        throw new ConflictException({
+          success: false,
+          message: 'Already a creator.',
+          error: { code: 'ALREADY_CREATOR' },
+        });
       }
-      throw new ConflictException({ success: false, message: 'Creator application already exists.', error: { code: 'APPLICATION_EXISTS' } });
+      throw new ConflictException({
+        success: false,
+        message: 'Creator application already exists.',
+        error: { code: 'APPLICATION_EXISTS' },
+      });
     }
 
     const profile = await this.creatorRepository.createProfile(userId, {
@@ -54,7 +83,7 @@ export class CreatorService {
 
     await this.creatorRepository.createKyc(profile.id, {
       full_name: dto.kyc_full_name,
-      id_type: dto.kyc_id_type as any,
+      id_type: dto.kyc_id_type,
       id_number: dto.kyc_id_number,
       id_front_url: dto.kyc_id_front_url,
       id_back_url: dto.kyc_id_back_url,
@@ -66,40 +95,61 @@ export class CreatorService {
     return {
       profileId: profile.id,
       status: profile.status,
-      message: 'Creator application submitted successfully. Awaiting admin review.',
+      message:
+        'Creator application submitted successfully. Awaiting admin review.',
     };
   }
 
   async getProfile(userId: string): Promise<CreatorProfileEntity> {
     const profile = await this.creatorRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Creator profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Creator profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     return this.mapProfileToEntity(profile);
   }
 
-  async updateProfile(userId: string, dto: UpdateCreatorProfileDto): Promise<CreatorProfileEntity> {
+  async updateProfile(
+    userId: string,
+    dto: UpdateCreatorProfileDto,
+  ): Promise<CreatorProfileEntity> {
     const profile = await this.creatorRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Creator profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Creator profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     const data: Record<string, unknown> = {};
     if (dto.bio !== undefined) data.bio = dto.bio;
-    if (dto.instagram_handle !== undefined) data.instagram_handle = dto.instagram_handle;
+    if (dto.instagram_handle !== undefined)
+      data.instagram_handle = dto.instagram_handle;
     if (dto.tiktok_handle !== undefined) data.tiktok_handle = dto.tiktok_handle;
-    if (dto.youtube_handle !== undefined) data.youtube_handle = dto.youtube_handle;
+    if (dto.youtube_handle !== undefined)
+      data.youtube_handle = dto.youtube_handle;
     if (dto.website_url !== undefined) data.website_url = dto.website_url;
 
-    const updated = await this.creatorRepository.updateProfile(profile.id, data);
+    const updated = await this.creatorRepository.updateProfile(
+      profile.id,
+      data,
+    );
     return this.mapProfileToEntity(updated);
   }
 
   async getDashboard(userId: string): Promise<CreatorDashboardEntity> {
     const profile = await this.creatorRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Creator profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Creator profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     const [followersCount, videoCount] = await Promise.all([
@@ -120,7 +170,11 @@ export class CreatorService {
   async getVerification(userId: string) {
     const profile = await this.creatorRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Creator profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Creator profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     return {
@@ -134,10 +188,16 @@ export class CreatorService {
   async getVideos(userId: string) {
     const profile = await this.creatorRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Creator profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Creator profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
-    const videos = await this.creatorRepository.findVideosByCreatorId(profile.id);
+    const videos = await this.creatorRepository.findVideosByCreatorId(
+      profile.id,
+    );
 
     const drafts: any[] = [];
     const published: any[] = [];
@@ -155,7 +215,7 @@ export class CreatorService {
         createdAt: v.created_at,
       };
 
-      if (v.status === 'DRAFT') {
+      if (v.status === VideoStatus.DRAFT) {
         drafts.push(item);
       } else {
         published.push(item);
@@ -172,15 +232,22 @@ export class CreatorService {
   async approveCreator(profileId: string, adminUserId: string) {
     const profile = await this.creatorRepository.findById(profileId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Creator application not found.', error: { code: 'APPLICATION_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Creator application not found.',
+        error: { code: 'APPLICATION_NOT_FOUND' },
+      });
     }
 
     if (profile.status !== ApprovalStatus.PENDING) {
-      throw new BadRequestException({ success: false, message: 'Application is not pending.', error: { code: 'APPLICATION_NOT_PENDING' } });
+      throw new BadRequestException({
+        success: false,
+        message: 'Application is not pending.',
+        error: { code: 'APPLICATION_NOT_PENDING' },
+      });
     }
 
-    await this.creatorRepository.updateStatus(profileId, ApprovalStatus.APPROVED);
-    await this.creatorRepository.updateKycStatus(profileId, KycStatus.APPROVED, adminUserId);
+    await this.creatorRepository.approveApplication(profileId, adminUserId);
 
     await this.usersRepository.assignRole(profile.user_id, 'CREATOR');
 
@@ -192,15 +259,26 @@ export class CreatorService {
   async rejectCreator(profileId: string, adminUserId: string, reason?: string) {
     const profile = await this.creatorRepository.findById(profileId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Creator application not found.', error: { code: 'APPLICATION_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Creator application not found.',
+        error: { code: 'APPLICATION_NOT_FOUND' },
+      });
     }
 
     if (profile.status !== ApprovalStatus.PENDING) {
-      throw new BadRequestException({ success: false, message: 'Application is not pending.', error: { code: 'APPLICATION_NOT_PENDING' } });
+      throw new BadRequestException({
+        success: false,
+        message: 'Application is not pending.',
+        error: { code: 'APPLICATION_NOT_PENDING' },
+      });
     }
 
-    await this.creatorRepository.updateStatus(profileId, ApprovalStatus.REJECTED, reason);
-    await this.creatorRepository.updateKycStatus(profileId, KycStatus.REJECTED, adminUserId, reason);
+    await this.creatorRepository.rejectApplication(
+      profileId,
+      adminUserId,
+      reason,
+    );
 
     this.logger.log(`Creator ${profileId} rejected by admin ${adminUserId}`);
 

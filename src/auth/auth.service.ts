@@ -5,8 +5,9 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Logger,
+  Inject,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseService } from '../firebase/firebase.service';
 import { UsersService } from '../users/users.service';
@@ -15,10 +16,9 @@ import { RoleName } from '../common/enums/role.enum';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { getAuth } from 'firebase-admin/auth';
 import { FIREBASE_ADMIN_PROVIDER } from '../firebase/firebase-admin.provider';
-import { Inject } from '@nestjs/common';
 import { App } from 'firebase-admin/app';
 
-const IDENTITY_TOOLKIT_BASE = 'https://identitytoolkit.googleapis.com/v1'
+const IDENTITY_TOOLKIT_BASE = 'https://identitytoolkit.googleapis.com/v1';
 
 @Injectable()
 export class AuthService {
@@ -51,8 +51,9 @@ export class AuthService {
     });
 
     if (data.roles && data.roles.length > 0) {
+      const validCreatorRoles: RoleName[] = [RoleName.CREATOR, RoleName.SALON];
       const validRoles = data.roles.filter((r) =>
-        ['CREATOR', 'SALON'].includes(r),
+        validCreatorRoles.includes(r as RoleName),
       );
       if (validRoles.length > 0) {
         await getAuth(this.firebaseAdmin).setCustomUserClaims(
@@ -65,10 +66,17 @@ export class AuthService {
     try {
       await this.sendVerificationEmail(data.email);
 
+      const validRolesList: RoleName[] = [RoleName.CREATOR, RoleName.SALON];
+
       return {
         email: data.email,
         emailVerified: false,
-        roles: [RoleName.CUSTOMER, ...(data.roles?.filter((r) => ['CREATOR', 'SALON'].includes(r)) || [])],
+        roles: [
+          RoleName.CUSTOMER,
+          ...(data.roles?.filter((r) =>
+            validRolesList.includes(r as RoleName),
+          ) || []),
+        ],
         message:
           'Account created. Please check your inbox and verify your email before logging in.',
       };
@@ -100,6 +108,17 @@ export class AuthService {
 
     const selectedRoles: string[] = (decodedToken as any).selectedRoles || [];
 
+    const existingUser = await this.usersService.findByFirebaseUid(
+      decodedToken.uid,
+    );
+    if (existingUser && !existingUser.is_active) {
+      throw new UnauthorizedException({
+        success: false,
+        message: 'Account is deactivated. Please contact support.',
+        error: { code: 'AUTH_USER_DEACTIVATED' },
+      });
+    }
+
     const user = await this.usersService.upsertByFirebaseUid({
       firebaseUid: decodedToken.uid,
       email: decodedToken.email,
@@ -110,7 +129,10 @@ export class AuthService {
     });
 
     if (selectedRoles.length > 0) {
-      await getAuth(this.firebaseAdmin).setCustomUserClaims(decodedToken.uid, {});
+      await getAuth(this.firebaseAdmin).setCustomUserClaims(
+        decodedToken.uid,
+        {},
+      );
     }
 
     const roleNames = this.usersService.extractRoleNames(user);
@@ -123,8 +145,12 @@ export class AuthService {
       activeRole,
     });
 
+    const refreshExpiryDays = this.configService.get<number>(
+      'JWT_REFRESH_EXPIRY_DAYS',
+      30,
+    );
     const refreshExpiresAt = new Date();
-    refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 30);
+    refreshExpiresAt.setDate(refreshExpiresAt.getDate() + refreshExpiryDays);
 
     await this.sessionsService.createSession({
       userId: user.id,
@@ -183,8 +209,12 @@ export class AuthService {
       activeRole,
     });
 
+    const refreshExpiryDays = this.configService.get<number>(
+      'JWT_REFRESH_EXPIRY_DAYS',
+      30,
+    );
     const refreshExpiresAt = new Date();
-    refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 30);
+    refreshExpiresAt.setDate(refreshExpiresAt.getDate() + refreshExpiryDays);
 
     await this.sessionsService.rotateRefreshToken({
       oldRefreshToken: refreshToken,
@@ -239,7 +269,7 @@ export class AuthService {
 
   async getProfile(userId: string) {
     const user = await this.usersService.findById(userId);
-    if (!user) {
+    if (!user || !user.is_active) {
       throw new UnauthorizedException({
         success: false,
         message: 'User not found',
@@ -306,7 +336,9 @@ export class AuthService {
         actionCodeSettings,
       );
     } catch (error: any) {
-      this.logger.error(`Failed to generate verification link: ${error.message}`);
+      this.logger.error(
+        `Failed to generate verification link: ${error.message}`,
+      );
       throw new InternalServerErrorException({
         success: false,
         message: 'Failed to generate verification link.',
@@ -326,7 +358,9 @@ export class AuthService {
         actionCodeSettings,
       );
     } catch (error: any) {
-      this.logger.error(`Failed to generate password reset link: ${error.message}`);
+      this.logger.error(
+        `Failed to generate password reset link: ${error.message}`,
+      );
       throw new InternalServerErrorException({
         success: false,
         message: 'Failed to generate password reset link.',
@@ -353,9 +387,13 @@ export class AuthService {
     }
   }
 
-  async getVerificationStatus(email: string): Promise<{ emailVerified: boolean }> {
+  async getVerificationStatus(
+    email: string,
+  ): Promise<{ emailVerified: boolean }> {
     try {
-      const firebaseUser = await getAuth(this.firebaseAdmin).getUserByEmail(email);
+      const firebaseUser = await getAuth(this.firebaseAdmin).getUserByEmail(
+        email,
+      );
       return { emailVerified: firebaseUser.emailVerified };
     } catch (error: any) {
       return { emailVerified: false };
@@ -383,7 +421,9 @@ export class AuthService {
         email,
       });
     } catch (error: any) {
-      this.logger.error(`Failed to send password reset email: ${error.message}`);
+      this.logger.error(
+        `Failed to send password reset email: ${error.message}`,
+      );
       throw new InternalServerErrorException({
         success: false,
         message: 'Failed to send password reset email. Please try again later.',
@@ -416,7 +456,9 @@ export class AuthService {
           error: { code: 'AUTH_FIREBASE_DELETE_FAILED' },
         });
       }
-      this.logger.warn(`Firebase user already deleted, proceeding with DB cleanup`);
+      this.logger.warn(
+        `Firebase user already deleted, proceeding with DB cleanup`,
+      );
     }
 
     // Soft delete from PostgreSQL
@@ -444,7 +486,9 @@ export class AuthService {
           error: { code: 'AUTH_FIREBASE_DELETE_FAILED' },
         });
       }
-      this.logger.warn(`Firebase user already deleted, proceeding with DB cleanup`);
+      this.logger.warn(
+        `Firebase user already deleted, proceeding with DB cleanup`,
+      );
     }
 
     await this.usersService.softDeleteById(targetUserId);
@@ -481,7 +525,10 @@ export class AuthService {
     return apiKey;
   }
 
-  private async callIdentityToolkit(endpoint: string, body: Record<string, any>): Promise<any> {
+  private async callIdentityToolkit(
+    endpoint: string,
+    body: Record<string, any>,
+  ): Promise<any> {
     const apiKey = this.getFirebaseApiKey();
     const res = await fetch(
       `${IDENTITY_TOOLKIT_BASE}/${endpoint}?key=${apiKey}`,
@@ -489,7 +536,7 @@ export class AuthService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }
+      },
     );
     const data = await res.json();
     if (!res.ok) {
@@ -498,22 +545,35 @@ export class AuthService {
     return data;
   }
 
-  private async getIdTokenForEmail(email: string, password?: string): Promise<string> {
+  private async getIdTokenForEmail(
+    email: string,
+    password?: string,
+  ): Promise<string> {
     if (password) {
-      const data = await this.callIdentityToolkit('accounts:signInWithPassword', {
-        email,
-        password,
-        returnSecureToken: true,
-      });
+      const data = await this.callIdentityToolkit(
+        'accounts:signInWithPassword',
+        {
+          email,
+          password,
+          returnSecureToken: true,
+        },
+      );
       return data.idToken;
     }
 
-    const firebaseUser = await getAuth(this.firebaseAdmin).getUserByEmail(email);
-    const customToken = await getAuth(this.firebaseAdmin).createCustomToken(firebaseUser.uid);
-    const data = await this.callIdentityToolkit('accounts:signInWithCustomToken', {
-      token: customToken,
-      returnSecureToken: true,
-    });
+    const firebaseUser = await getAuth(this.firebaseAdmin).getUserByEmail(
+      email,
+    );
+    const customToken = await getAuth(this.firebaseAdmin).createCustomToken(
+      firebaseUser.uid,
+    );
+    const data = await this.callIdentityToolkit(
+      'accounts:signInWithCustomToken',
+      {
+        token: customToken,
+        returnSecureToken: true,
+      },
+    );
     return data.idToken;
   }
 
@@ -526,19 +586,20 @@ export class AuthService {
   }
 
   private async generateAccessToken(payload: JwtPayload): Promise<string> {
-    return this.jwtService.signAsync(payload, {
+    const options: JwtSignOptions = {
       secret: this.configService.get<string>('JWT_SECRET'),
-      expiresIn: '15m',
-    });
+      expiresIn: (this.configService.get<string>('JWT_EXPIRES_IN') ||
+        '15m') as any,
+    };
+    return this.jwtService.signAsync(payload, options);
   }
 
   private async generateRefreshToken(payload: JwtPayload): Promise<string> {
-    return this.jwtService.signAsync(
-      { sub: payload.sub },
-      {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: '30d',
-      },
-    );
+    const options: JwtSignOptions = {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ||
+        '30d') as any,
+    };
+    return this.jwtService.signAsync({ sub: payload.sub }, options);
   }
 }

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, UserStatus } from '@prisma/client';
 import { UsersRepository } from './users.repository';
+import { RoleName } from '../common/enums/role.enum';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -23,8 +24,12 @@ export class UsersService {
 
   async getProfile(userId: string) {
     const user = await this.usersRepository.findById(userId);
-    if (!user) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+    if (!user || !user.is_active) {
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
 
     const roleNames = this.usersRepository.extractRoleNames(user);
@@ -55,13 +60,19 @@ export class UsersService {
     if (dto.username) {
       const existing = await this.usersRepository.findByUsername(dto.username);
       if (existing && existing.id !== userId) {
-        throw new ConflictException({ success: false, message: 'Username already taken.', error: { code: 'USERNAME_EXISTS' } });
+        throw new ConflictException({
+          success: false,
+          message: 'Username already taken.',
+          error: { code: 'USERNAME_EXISTS' },
+        });
       }
     }
 
     const data: Record<string, unknown> = {};
-    if (dto.display_name !== undefined) data.display_name = dto.display_name?.toString().trim();
-    if (dto.username !== undefined) data.username = dto.username?.toString().trim().toLowerCase();
+    if (dto.display_name !== undefined)
+      data.display_name = dto.display_name?.toString().trim();
+    if (dto.username !== undefined)
+      data.username = dto.username?.toString().trim().toLowerCase();
     if (dto.bio !== undefined) data.bio = dto.bio?.toString().trim();
     if (dto.gender !== undefined) data.gender = dto.gender?.toString().trim();
     if (dto.date_of_birth !== undefined) {
@@ -70,10 +81,12 @@ export class UsersService {
         data.date_of_birth = parsed;
       }
     }
-    if (dto.country !== undefined) data.country = dto.country?.toString().trim();
+    if (dto.country !== undefined)
+      data.country = dto.country?.toString().trim();
     if (dto.state !== undefined) data.state = dto.state?.toString().trim();
     if (dto.city !== undefined) data.city = dto.city?.toString().trim();
-    if (dto.preferred_language !== undefined) data.preferred_language = dto.preferred_language?.toString().trim();
+    if (dto.preferred_language !== undefined)
+      data.preferred_language = dto.preferred_language?.toString().trim();
 
     const user = await this.usersRepository.updateProfile(userId, data);
     return this.getProfile(user.id);
@@ -82,7 +95,11 @@ export class UsersService {
   async getPublicProfile(userId: string) {
     const user = await this.usersRepository.findById(userId);
     if (!user || user.status === UserStatus.DELETED) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
 
     const roleNames = this.usersRepository.extractRoleNames(user);
@@ -97,15 +114,19 @@ export class UsersService {
       avatarUrl: user.avatar_url,
       followerCount,
       followingCount,
-      isCreator: roleNames.includes('CREATOR' as any),
-      isSalon: roleNames.includes('SALON' as any),
+      isCreator: roleNames.includes(RoleName.CREATOR),
+      isSalon: roleNames.includes(RoleName.SALON),
     };
   }
 
   async getPublicProfileByUsername(username: string) {
     const user = await this.usersRepository.findByUsername(username);
     if (!user || user.status === UserStatus.DELETED) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
     return this.getPublicProfile(user.id);
   }
@@ -113,7 +134,11 @@ export class UsersService {
   async deleteAccount(userId: string) {
     const user = await this.usersRepository.findById(userId);
     if (!user) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
     await this.usersRepository.softDelete(userId);
     this.logger.log(`User ${userId} account deactivated`);
@@ -123,12 +148,20 @@ export class UsersService {
 
   async uploadAvatar(userId: string, file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException({ success: false, message: 'No file provided.', error: { code: 'FILE_REQUIRED' } });
+      throw new BadRequestException({
+        success: false,
+        message: 'No file provided.',
+        error: { code: 'FILE_REQUIRED' },
+      });
     }
 
     const user = await this.usersRepository.findById(userId);
     if (!user) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
 
     if (user.avatar_url) {
@@ -144,7 +177,11 @@ export class UsersService {
   async deleteAvatar(userId: string) {
     const user = await this.usersRepository.findById(userId);
     if (!user) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
 
     if (user.avatar_url) {
@@ -173,8 +210,15 @@ export class UsersService {
     try {
       await this.usersRepository.saveVideo(userId, videoId);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-        throw new NotFoundException({ success: false, message: 'Video not found.', error: { code: 'VIDEO_NOT_FOUND' } });
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new NotFoundException({
+          success: false,
+          message: 'Video not found.',
+          error: { code: 'VIDEO_NOT_FOUND' },
+        });
       }
       throw error;
     }
@@ -185,8 +229,15 @@ export class UsersService {
     try {
       await this.usersRepository.unsaveVideo(userId, videoId);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException({ success: false, message: 'Video not found in saved list.', error: { code: 'SAVED_VIDEO_NOT_FOUND' } });
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException({
+          success: false,
+          message: 'Video not found in saved list.',
+          error: { code: 'SAVED_VIDEO_NOT_FOUND' },
+        });
       }
       throw error;
     }
@@ -207,12 +258,29 @@ export class UsersService {
     }));
   }
 
-  async recordWatch(userId: string, videoId: string, lastPosition = 0, completed = false) {
+  async recordWatch(
+    userId: string,
+    videoId: string,
+    lastPosition = 0,
+    completed = false,
+  ) {
     try {
-      await this.usersRepository.upsertWatchHistory(userId, videoId, lastPosition, completed);
+      await this.usersRepository.upsertWatchHistory(
+        userId,
+        videoId,
+        lastPosition,
+        completed,
+      );
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-        throw new NotFoundException({ success: false, message: 'Video not found.', error: { code: 'VIDEO_NOT_FOUND' } });
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new NotFoundException({
+          success: false,
+          message: 'Video not found.',
+          error: { code: 'VIDEO_NOT_FOUND' },
+        });
       }
       throw error;
     }
@@ -253,19 +321,34 @@ export class UsersService {
 
   async follow(userId: string, targetUserId: string) {
     if (userId === targetUserId) {
-      throw new BadRequestException({ success: false, message: 'Cannot follow yourself.', error: { code: 'SELF_FOLLOW' } });
+      throw new BadRequestException({
+        success: false,
+        message: 'Cannot follow yourself.',
+        error: { code: 'SELF_FOLLOW' },
+      });
     }
 
     const target = await this.usersRepository.findById(targetUserId);
     if (!target) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
 
     try {
       await this.usersRepository.follow(userId, targetUserId);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-        throw new NotFoundException({ success: false, message: 'Target user not found.', error: { code: 'USER_NOT_FOUND' } });
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new NotFoundException({
+          success: false,
+          message: 'Target user not found.',
+          error: { code: 'USER_NOT_FOUND' },
+        });
       }
       throw error;
     }
@@ -276,8 +359,15 @@ export class UsersService {
     try {
       await this.usersRepository.unfollow(userId, targetUserId);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException({ success: false, message: 'Not following this user.', error: { code: 'FOLLOW_NOT_FOUND' } });
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException({
+          success: false,
+          message: 'Not following this user.',
+          error: { code: 'FOLLOW_NOT_FOUND' },
+        });
       }
       throw error;
     }
@@ -285,7 +375,10 @@ export class UsersService {
 
   // ─── Dashboard ───────────────────────────────────────────────────
 
-  async getHomeFeed(userId: string, options?: { page?: number; limit?: number }) {
+  async getHomeFeed(
+    userId: string,
+    options?: { page?: number; limit?: number },
+  ) {
     const page = Math.max(1, options?.page || 1);
     const limit = Math.min(50, Math.max(1, options?.limit || 20));
     const skip = (page - 1) * limit;
@@ -355,8 +448,12 @@ export class UsersService {
   }
 
   async upsertByFirebaseUid(data: {
-    firebaseUid: string; email?: string; phone?: string;
-    displayName?: string; avatarUrl?: string; extraRoles?: string[];
+    firebaseUid: string;
+    email?: string;
+    phone?: string;
+    displayName?: string;
+    avatarUrl?: string;
+    extraRoles?: string[];
   }) {
     return this.usersRepository.upsertByFirebaseUid(data);
   }
@@ -376,5 +473,4 @@ export class UsersService {
   async assignRole(userId: string, roleName: string) {
     return this.usersRepository.assignRole(userId, roleName);
   }
-
 }

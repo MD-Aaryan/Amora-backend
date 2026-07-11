@@ -17,10 +17,7 @@ export class FirebaseService {
       throw new UnauthorizedException({
         success: false,
         message: 'Invalid Firebase ID token',
-        error: {
-          code: 'AUTH_INVALID_TOKEN',
-          details: error.message,
-        },
+        error: { code: 'AUTH_INVALID_TOKEN' },
       });
     }
   }

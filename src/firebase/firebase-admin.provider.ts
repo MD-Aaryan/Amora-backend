@@ -13,8 +13,12 @@ export const FirebaseAdminProvider = {
     let privateKey = configService.get<string>('FIREBASE_PRIVATE_KEY');
 
     if (!projectId || !clientEmail || !privateKey) {
-      logger.error('Firebase configuration is incomplete. Please check your environment variables.');
-      throw new Error('Firebase configuration missing: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, or FIREBASE_PRIVATE_KEY');
+      logger.error(
+        'Firebase configuration is incomplete. Please check your environment variables.',
+      );
+      throw new Error(
+        'Firebase configuration missing: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, or FIREBASE_PRIVATE_KEY',
+      );
     }
 
     // Clean private key: remove surrounding quotes and convert escaped newlines
@@ -33,9 +37,10 @@ export const FirebaseAdminProvider = {
       });
     }
 
-    logger.log('Firebase Admin SDK default app already initialized, returning existing instance');
+    logger.log(
+      'Firebase Admin SDK default app already initialized, returning existing instance',
+    );
     return getApp();
   },
   inject: [ConfigService],
 };
-

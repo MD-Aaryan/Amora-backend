@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { App } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { FIREBASE_ADMIN_PROVIDER } from './firebase-admin.provider';
@@ -37,11 +43,16 @@ export class FirebaseMessagingService {
         data: payload.data,
       });
 
-      this.logger.log(`Push notification sent successfully to token. Message ID: ${messageId}`);
+      this.logger.log(
+        `Push notification sent successfully to token. Message ID: ${messageId}`,
+      );
       return messageId;
     } catch (error: any) {
-      this.logger.error(`Failed to send push notification to device: ${error.message}`, error.stack);
-      
+      this.logger.error(
+        `Failed to send push notification to device: ${error.message}`,
+        error.stack,
+      );
+
       const errorCode = error.code;
       if (
         errorCode === 'messaging/invalid-registration-token' ||
@@ -93,11 +104,16 @@ export class FirebaseMessagingService {
         data: payload.data,
       });
 
-      this.logger.log(`Push notification sent successfully to topic "${topic}". Message ID: ${messageId}`);
+      this.logger.log(
+        `Push notification sent successfully to topic "${topic}". Message ID: ${messageId}`,
+      );
       return messageId;
     } catch (error: any) {
-      this.logger.error(`Failed to send push notification to topic "${topic}": ${error.message}`, error.stack);
-      
+      this.logger.error(
+        `Failed to send push notification to topic "${topic}": ${error.message}`,
+        error.stack,
+      );
+
       throw new InternalServerErrorException({
         success: false,
         message: 'Failed to send push notification to topic.',

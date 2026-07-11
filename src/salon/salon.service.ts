@@ -29,22 +29,46 @@ export class SalonService {
   async apply(userId: string, dto: ApplySalonDto) {
     const user = await this.usersRepository.findById(userId);
     if (!user) {
-      throw new NotFoundException({ success: false, message: 'User not found.', error: { code: 'USER_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'User not found.',
+        error: { code: 'USER_NOT_FOUND' },
+      });
     }
 
-    if (user.status === UserStatus.BLOCKED || user.status === UserStatus.SUSPENDED || user.status === UserStatus.DELETED) {
-      throw new ForbiddenException({ success: false, message: 'Account is not eligible.', error: { code: 'ACCOUNT_INELIGIBLE' } });
+    if (
+      user.status === UserStatus.BLOCKED ||
+      user.status === UserStatus.SUSPENDED ||
+      user.status === UserStatus.DELETED
+    ) {
+      throw new ForbiddenException({
+        success: false,
+        message: 'Account is not eligible.',
+        error: { code: 'ACCOUNT_INELIGIBLE' },
+      });
     }
 
     const existingProfile = await this.salonRepository.findByUserId(userId);
     if (existingProfile) {
       if (existingProfile.status === ApprovalStatus.PENDING) {
-        throw new ConflictException({ success: false, message: 'Salon application already pending.', error: { code: 'APPLICATION_PENDING' } });
+        throw new ConflictException({
+          success: false,
+          message: 'Salon application already pending.',
+          error: { code: 'APPLICATION_PENDING' },
+        });
       }
       if (existingProfile.status === ApprovalStatus.APPROVED) {
-        throw new ConflictException({ success: false, message: 'Already a salon partner.', error: { code: 'ALREADY_SALON' } });
+        throw new ConflictException({
+          success: false,
+          message: 'Already a salon partner.',
+          error: { code: 'ALREADY_SALON' },
+        });
       }
-      throw new ConflictException({ success: false, message: 'Salon application already exists.', error: { code: 'APPLICATION_EXISTS' } });
+      throw new ConflictException({
+        success: false,
+        message: 'Salon application already exists.',
+        error: { code: 'APPLICATION_EXISTS' },
+      });
     }
 
     const profile = await this.salonRepository.createProfile(userId, {
@@ -78,23 +102,35 @@ export class SalonService {
     return {
       profileId: profile.id,
       status: profile.status,
-      message: 'Salon application submitted successfully. Awaiting admin review.',
+      message:
+        'Salon application submitted successfully. Awaiting admin review.',
     };
   }
 
   async getProfile(userId: string): Promise<SalonProfileEntity> {
     const profile = await this.salonRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     return this.mapProfileToEntity(profile);
   }
 
-  async updateProfile(userId: string, dto: UpdateSalonProfileDto): Promise<SalonProfileEntity> {
+  async updateProfile(
+    userId: string,
+    dto: UpdateSalonProfileDto,
+  ): Promise<SalonProfileEntity> {
     const profile = await this.salonRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     const data: Record<string, unknown> = {};
@@ -110,7 +146,8 @@ export class SalonService {
     if (dto.phone !== undefined) data.phone = dto.phone;
     if (dto.email !== undefined) data.email = dto.email;
     if (dto.website !== undefined) data.website = dto.website;
-    if (dto.business_hours !== undefined) data.business_hours = dto.business_hours;
+    if (dto.business_hours !== undefined)
+      data.business_hours = dto.business_hours;
     if (dto.logo_url !== undefined) data.logo_url = dto.logo_url;
 
     const updated = await this.salonRepository.updateProfile(profile.id, data);
@@ -120,7 +157,11 @@ export class SalonService {
   async getDashboard(userId: string): Promise<SalonDashboardEntity> {
     const profile = await this.salonRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     const [totalServices, totalVideos] = await Promise.all([
@@ -141,7 +182,11 @@ export class SalonService {
   async getVerification(userId: string) {
     const profile = await this.salonRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     return {
@@ -155,17 +200,30 @@ export class SalonService {
   async getServices(userId: string) {
     const profile = await this.salonRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
-    const services = await this.salonRepository.findServicesBySalonId(profile.id);
+    const services = await this.salonRepository.findServicesBySalonId(
+      profile.id,
+    );
     return services.map((s) => this.mapServiceToEntity(s));
   }
 
-  async createService(userId: string, dto: CreateServiceDto): Promise<ServiceEntity> {
+  async createService(
+    userId: string,
+    dto: CreateServiceDto,
+  ): Promise<ServiceEntity> {
     const profile = await this.salonRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     const service = await this.salonRepository.createService(profile.id, {
@@ -179,15 +237,27 @@ export class SalonService {
     return this.mapServiceToEntity(service);
   }
 
-  async updateService(userId: string, serviceId: string, dto: UpdateServiceDto): Promise<ServiceEntity> {
+  async updateService(
+    userId: string,
+    serviceId: string,
+    dto: UpdateServiceDto,
+  ): Promise<ServiceEntity> {
     const profile = await this.salonRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     const service = await this.salonRepository.findServiceById(serviceId);
     if (!service || service.salon_id !== profile.id) {
-      throw new NotFoundException({ success: false, message: 'Service not found.', error: { code: 'SERVICE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Service not found.',
+        error: { code: 'SERVICE_NOT_FOUND' },
+      });
     }
 
     const data: Record<string, unknown> = {};
@@ -204,12 +274,20 @@ export class SalonService {
   async deleteService(userId: string, serviceId: string) {
     const profile = await this.salonRepository.findByUserId(userId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon profile not found.', error: { code: 'PROFILE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon profile not found.',
+        error: { code: 'PROFILE_NOT_FOUND' },
+      });
     }
 
     const service = await this.salonRepository.findServiceById(serviceId);
     if (!service || service.salon_id !== profile.id) {
-      throw new NotFoundException({ success: false, message: 'Service not found.', error: { code: 'SERVICE_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Service not found.',
+        error: { code: 'SERVICE_NOT_FOUND' },
+      });
     }
 
     await this.salonRepository.deleteService(serviceId);
@@ -223,15 +301,22 @@ export class SalonService {
   async approveSalon(profileId: string, adminUserId: string) {
     const profile = await this.salonRepository.findById(profileId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon application not found.', error: { code: 'APPLICATION_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon application not found.',
+        error: { code: 'APPLICATION_NOT_FOUND' },
+      });
     }
 
     if (profile.status !== ApprovalStatus.PENDING) {
-      throw new BadRequestException({ success: false, message: 'Application is not pending.', error: { code: 'APPLICATION_NOT_PENDING' } });
+      throw new BadRequestException({
+        success: false,
+        message: 'Application is not pending.',
+        error: { code: 'APPLICATION_NOT_PENDING' },
+      });
     }
 
-    await this.salonRepository.updateStatus(profileId, ApprovalStatus.APPROVED);
-    await this.salonRepository.updateKycStatus(profileId, KycStatus.APPROVED, adminUserId);
+    await this.salonRepository.approveApplication(profileId, adminUserId);
 
     await this.usersRepository.assignRole(profile.user_id, 'SALON');
 
@@ -243,15 +328,26 @@ export class SalonService {
   async rejectSalon(profileId: string, adminUserId: string, reason?: string) {
     const profile = await this.salonRepository.findById(profileId);
     if (!profile) {
-      throw new NotFoundException({ success: false, message: 'Salon application not found.', error: { code: 'APPLICATION_NOT_FOUND' } });
+      throw new NotFoundException({
+        success: false,
+        message: 'Salon application not found.',
+        error: { code: 'APPLICATION_NOT_FOUND' },
+      });
     }
 
     if (profile.status !== ApprovalStatus.PENDING) {
-      throw new BadRequestException({ success: false, message: 'Application is not pending.', error: { code: 'APPLICATION_NOT_PENDING' } });
+      throw new BadRequestException({
+        success: false,
+        message: 'Application is not pending.',
+        error: { code: 'APPLICATION_NOT_PENDING' },
+      });
     }
 
-    await this.salonRepository.updateStatus(profileId, ApprovalStatus.REJECTED, reason);
-    await this.salonRepository.updateKycStatus(profileId, KycStatus.REJECTED, adminUserId, reason);
+    await this.salonRepository.rejectApplication(
+      profileId,
+      adminUserId,
+      reason,
+    );
 
     this.logger.log(`Salon ${profileId} rejected by admin ${adminUserId}`);
 

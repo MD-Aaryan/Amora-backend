@@ -48,7 +48,13 @@ export class CreatorRepository {
 
   async createProfile(
     userId: string,
-    data: { bio?: string; instagram_handle?: string; tiktok_handle?: string; youtube_handle?: string; website_url?: string },
+    data: {
+      bio?: string;
+      instagram_handle?: string;
+      tiktok_handle?: string;
+      youtube_handle?: string;
+      website_url?: string;
+    },
   ) {
     return this.prisma.creatorProfile.create({
       data: {
@@ -129,7 +135,11 @@ export class CreatorRepository {
     });
   }
 
-  async updateStatus(id: string, status: ApprovalStatus, rejectedReason?: string) {
+  async updateStatus(
+    id: string,
+    status: ApprovalStatus,
+    rejectedReason?: string,
+  ) {
     return this.prisma.creatorProfile.update({
       where: { id },
       data: {
@@ -140,7 +150,12 @@ export class CreatorRepository {
     });
   }
 
-  async updateKycStatus(profileId: string, status: KycStatus, reviewedBy: string, rejectionReason?: string) {
+  async updateKycStatus(
+    profileId: string,
+    status: KycStatus,
+    reviewedBy: string,
+    rejectionReason?: string,
+  ) {
     return this.prisma.creatorKyc.update({
       where: { creator_profile_id: profileId },
       data: {
@@ -149,6 +164,45 @@ export class CreatorRepository {
         reviewed_at: new Date(),
         rejection_reason: rejectionReason,
       },
+    });
+  }
+
+  async approveApplication(profileId: string, adminUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.creatorProfile.update({
+        where: { id: profileId },
+        data: { status: ApprovalStatus.APPROVED, is_verified: true },
+      });
+      await tx.creatorKyc.update({
+        where: { creator_profile_id: profileId },
+        data: {
+          status: KycStatus.APPROVED,
+          reviewed_by: adminUserId,
+          reviewed_at: new Date(),
+        },
+      });
+    });
+  }
+
+  async rejectApplication(
+    profileId: string,
+    adminUserId: string,
+    reason?: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.creatorProfile.update({
+        where: { id: profileId },
+        data: { status: ApprovalStatus.REJECTED, rejected_reason: reason },
+      });
+      await tx.creatorKyc.update({
+        where: { creator_profile_id: profileId },
+        data: {
+          status: KycStatus.REJECTED,
+          reviewed_by: adminUserId,
+          reviewed_at: new Date(),
+          rejection_reason: reason,
+        },
+      });
     });
   }
 
@@ -167,6 +221,8 @@ export class CreatorRepository {
   }
 
   async countVideos(creatorId: string) {
-    return this.prisma.video.count({ where: { creator_id: creatorId, deleted_at: null } });
+    return this.prisma.video.count({
+      where: { creator_id: creatorId, deleted_at: null },
+    });
   }
 }

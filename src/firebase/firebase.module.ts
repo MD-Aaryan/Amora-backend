@@ -12,4 +12,3 @@ import { FirebaseMessagingController } from './firebase-messaging.controller';
   exports: [FirebaseService, FirebaseAdminProvider, FirebaseMessagingService],
 })
 export class FirebaseModule {}
-

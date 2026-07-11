@@ -5,7 +5,11 @@ export interface PaginatedResult<T> {
 
 export class PaginationUtil {
   static encodeCursor(id: string): string {
-    return Buffer.from(id).toString('base64');
+    return Buffer.from(id)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
   }
 
   static decodeCursor(cursor: string): string {

@@ -44,7 +44,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = exceptionResponse;
       }
     } else {
-      this.logger.error(`Unhandled exception: ${exception.message}`, exception.stack);
+      this.logger.error(
+        `Unhandled exception: ${exception.message}`,
+        exception.stack,
+      );
       message = 'Internal server error';
     }
 

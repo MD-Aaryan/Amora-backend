@@ -152,7 +152,11 @@ export class SalonRepository {
     });
   }
 
-  async updateStatus(id: string, status: ApprovalStatus, rejectedReason?: string) {
+  async updateStatus(
+    id: string,
+    status: ApprovalStatus,
+    rejectedReason?: string,
+  ) {
     return this.prisma.salonProfile.update({
       where: { id },
       data: {
@@ -163,7 +167,12 @@ export class SalonRepository {
     });
   }
 
-  async updateKycStatus(profileId: string, status: KycStatus, reviewedBy: string, rejectionReason?: string) {
+  async updateKycStatus(
+    profileId: string,
+    status: KycStatus,
+    reviewedBy: string,
+    rejectionReason?: string,
+  ) {
     return this.prisma.salonKyc.update({
       where: { salon_profile_id: profileId },
       data: {
@@ -175,7 +184,55 @@ export class SalonRepository {
     });
   }
 
-  async createService(salonId: string, data: { name: string; description?: string; price: number; duration: number; is_active?: boolean }) {
+  async approveApplication(profileId: string, adminUserId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.salonProfile.update({
+        where: { id: profileId },
+        data: { status: ApprovalStatus.APPROVED, is_verified: true },
+      });
+      await tx.salonKyc.update({
+        where: { salon_profile_id: profileId },
+        data: {
+          status: KycStatus.APPROVED,
+          reviewed_by: adminUserId,
+          reviewed_at: new Date(),
+        },
+      });
+    });
+  }
+
+  async rejectApplication(
+    profileId: string,
+    adminUserId: string,
+    reason?: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.salonProfile.update({
+        where: { id: profileId },
+        data: { status: ApprovalStatus.REJECTED, rejected_reason: reason },
+      });
+      await tx.salonKyc.update({
+        where: { salon_profile_id: profileId },
+        data: {
+          status: KycStatus.REJECTED,
+          reviewed_by: adminUserId,
+          reviewed_at: new Date(),
+          rejection_reason: reason,
+        },
+      });
+    });
+  }
+
+  async createService(
+    salonId: string,
+    data: {
+      name: string;
+      description?: string;
+      price: number;
+      duration: number;
+      is_active?: boolean;
+    },
+  ) {
     return this.prisma.service.create({
       data: {
         salon_id: salonId,
@@ -221,7 +278,9 @@ export class SalonRepository {
     });
   }
 
-  async countVideos(_salonId: string) {
-    return 0;
+  async countVideos(salonId: string) {
+    return this.prisma.video.count({
+      where: { salon_id: salonId, deleted_at: null },
+    });
   }
 }

@@ -1,12 +1,21 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { HashUtil } from '../common/utils/hash.util';
 
 @Injectable()
 export class SessionsService {
-  private readonly MAX_SESSIONS_PER_USER = 10;
+  private readonly maxSessionsPerUser: number;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.maxSessionsPerUser = this.configService.get<number>(
+      'MAX_SESSIONS_PER_USER',
+      10,
+    );
+  }
 
   async createSession(data: {
     userId: string;
@@ -117,7 +126,7 @@ export class SessionsService {
       },
     });
 
-    if (activeCount >= this.MAX_SESSIONS_PER_USER) {
+    if (activeCount >= this.maxSessionsPerUser) {
       // Revoke the oldest active sessions
       const oldestSessions = await this.prisma.session.findMany({
         where: {
@@ -126,7 +135,7 @@ export class SessionsService {
           expires_at: { gt: new Date() },
         },
         orderBy: { created_at: 'asc' },
-        take: activeCount - this.MAX_SESSIONS_PER_USER + 1,
+        take: activeCount - this.maxSessionsPerUser + 1,
       });
 
       if (oldestSessions.length > 0) {
